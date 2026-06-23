@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>一级回热朗肯循环 · 3D 仿真</title>
+<link rel="stylesheet" href="styles.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div class="app">
+  <!-- 顶栏 -->
+  <header class="bar">
+    <div class="logo">RC</div>
+    <div>
+      <h1>一级回热朗肯循环 · 3D 动力装置仿真</h1>
+      <div class="sub">Single-stage Regenerative Rankine Cycle · IAPWS-IF97 实时物性</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill">水蒸气工质 · 开式给水加热器</div>
+  </header>
+
+  <div class="workspace">
+    <!-- ============ 左:控制 ============ -->
+    <section class="panel">
+      <div class="panel-scroll">
+        <div class="sec-title">工况预设 <span class="en">Presets</span></div>
+        <div class="presets">
+          <button class="preset" data-preset="classic">经典中压 6MPa</button>
+          <button class="preset" data-preset="high">高压 15MPa</button>
+          <button class="preset" data-preset="ultra">超高压 16.5MPa</button>
+          <button class="preset" data-preset="real">实际(含损失)</button>
+        </div>
+
+        <div class="sec-title">循环参数 <span class="en">Cycle Inputs</span></div>
+
+        <div class="ctrl">
+          <div class="row"><label>锅炉压力 P<sub>boil</sub></label><span class="val" id="v_pboil"></span></div>
+          <div class="range"><span class="lo">1</span><input type="range" id="s_pboil" min="1" max="21" step="0.1" value="15"><span class="hi">21 MPa</span></div>
+        </div>
+        <div class="ctrl">
+          <div class="row"><label>汽轮机入口温度 T<sub>in</sub></label><span class="val" id="v_tin"></span></div>
+          <div class="range"><span class="lo">200</span><input type="range" id="s_tin" min="200" max="650" step="5" value="540"><span class="hi">650 °C</span></div>
+          <div style="font-size:10px;color:var(--txt-mut);margin-top:4px" id="tin_sat"></div>
+        </div>
+        <div class="ctrl">
+          <div class="row"><label>冷凝器压力 P<sub>cond</sub></label><span class="val" id="v_pcond"></span></div>
+          <div class="range"><span class="lo">3</span><input type="range" id="s_pcond" min="3" max="30" step="0.5" value="8"><span class="hi">30 kPa</span></div>
+        </div>
+        <div class="ctrl">
+          <div class="row"><label>抽汽压力 P<sub>ext</sub></label><span class="val" id="v_pext"></span></div>
+          <div class="range"><span class="lo">0.05</span><input type="range" id="s_pext" min="0.05" max="8" step="0.05" value="1"><span class="hi">8 MPa</span></div>
+        </div>
+
+        <div class="sec-title">效率与流量 <span class="en">Efficiency &amp; Flow</span></div>
+        <div class="ctrl">
+          <div class="row"><label>汽轮机等熵效率 η<sub>T</sub></label><span class="val" id="v_etat"></span></div>
+          <div class="range"><span class="lo">50</span><input type="range" id="s_etat" min="0.5" max="1" step="0.01" value="1"><span class="hi">100 %</span></div>
+        </div>
+        <div class="ctrl">
+          <div class="row"><label>泵等熵效率 η<sub>P</sub></label><span class="val" id="v_etap"></span></div>
+          <div class="range"><span class="lo">50</span><input type="range" id="s_etap" min="0.5" max="1" step="0.01" value="1"><span class="hi">100 %</span></div>
+        </div>
+        <div class="ctrl">
+          <div class="row"><label>蒸汽流量 ṁ</label><span class="val" id="v_mflow"></span></div>
+          <div class="range"><span class="lo">10</span><input type="range" id="s_mflow" min="10" max="500" step="10" value="120"><span class="hi">500 kg/s</span></div>
+        </div>
+
+        <div class="note">
+          <b>说明:</b> 拖动滑块实时重算状态点与循环性能,3D 管道按工质温度着色、蒸汽粒子流向与流量联动。参数不合理(如抽汽压力越界)会自动夹紧。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 中:3D ============ -->
+    <section class="panel stage">
+      <div id="scene3d"></div>
+      <div id="labels3d"></div>
+
+      <div class="stage-overlay">
+        <div class="tag">图 3 — 一级回热朗肯循环 3D 模型</div>
+        <div style="display:flex;gap:8px">
+          <button class="tag" id="btn_reset" style="cursor:pointer">复位视角</button>
+          <button class="tag" id="btn_def" style="cursor:pointer">默认工况</button>
+        </div>
+        <label class="tag" style="cursor:pointer;display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="cb_rotate" checked style="accent-color:var(--accent)"> 自动旋转
+        </label>
+      </div>
+
+      <div class="legend">
+        <div class="t">工质温度着色</div>
+        <div class="g"><span class="grad-sw"></span><span>冷 → 热</span></div>
+        <div class="t" style="margin-top:4px">鼠标:旋转 / 滚轮缩放</div>
+      </div>
+
+      <div class="stage-foot">
+        <span class="hint">● 锅炉 → 高压汽轮机 →〔抽汽→回热加热器〕→ 低压汽轮机 → 凝汽器 → 给水泵 → 回热加热器 → 给水泵 → 锅炉</span>
+        <span class="live"><span class="dot"></span>实时仿真</span>
+      </div>
+    </section>
+
+    <!-- ============ 右:输出 ============ -->
+    <section class="panel">
+      <div class="panel-scroll">
+        <div class="sec-title">循环性能 <span class="en">Performance</span></div>
+        <div class="metric-grid">
+          <div class="metric lg eta" id="m_eta"><div class="k">循环热效率 η</div><div class="v" id="v_eta">—</div><div class="bar"></div></div>
+          <div class="metric lg" id="m_wnet"><div class="k">净功 w<sub>net</sub></div><div class="v" id="v_wnet">—</div><div class="bar"></div></div>
+          <div class="metric lg hot" id="m_qin"><div class="k">吸热量 q<sub>in</sub></div><div class="v" id="v_qin">—</div><div class="bar"></div></div>
+          <div class="metric lg cold" id="m_qout"><div class="k">放热量 q<sub>out</sub></div><div class="v" id="v_qout">—</div><div class="bar"></div></div>
+          <div class="metric" id="m_wt"><div class="k">汽轮机功 w<sub>t</sub></div><div class="v" id="v_wt">—</div><div class="bar"></div></div>
+          <div class="metric" id="m_wp"><div class="k">泵耗功 w<sub>p</sub></div><div class="v" id="v_wp">—</div><div class="bar"></div></div>
+          <div class="metric" id="m_y"><div class="k">抽汽率 y</div><div class="v" id="v_y">—</div><div class="bar"></div></div>
+          <div class="metric" id="m_power"><div class="k">机组功率 P</div><div class="v" id="v_power">—</div><div class="bar"></div></div>
+        </div>
+
+        <div class="sec-title">效率对比 <span class="en">η Comparison</span></div>
+        <div class="cmp">
+          <div class="ln"><span>回热 η</span><div class="track"><div class="fill" id="cmp_regen" style="background:linear-gradient(90deg,#4d9bff,#36c5d8)"></div></div><div class="num" id="n_regen">—</div></div>
+          <div class="ln"><span>无回热 η</span><div class="track"><div class="fill" id="cmp_basic" style="background:linear-gradient(90deg,#5e6e96,#7c8fb6)"></div></div><div class="num" id="n_basic">—</div></div>
+          <div class="ln"><span>卡诺 η</span><div class="track"><div class="fill" id="cmp_carnot" style="background:linear-gradient(90deg,#ffb02e,#ff5a3c)"></div></div><div class="num" id="n_carnot">—</div></div>
+        </div>
+        <div class="note" id="cmp_note" style="margin-top:4px;border:none;padding:0"></div>
+
+        <div class="sec-title">状态点参数 <span class="en">State Points</span></div>
+        <table class="states">
+          <thead><tr><th>#</th><th>压力 P</th><th>T °C</th><th>h kJ/kg</th><th>s kJ/kgK</th><th>干度 x</th></tr></thead>
+          <tbody id="stateTable"></tbody>
+        </table>
+
+        <div class="sec-title" style="margin-top:16px">热力循环图 <span class="en">Cycle Diagrams</span></div>
+        <div class="chart-card">
+          <div class="ch-hd"><div class="t">T-s 图 <small>温度–熵(橙=吸热 / 蓝=放热)</small></div></div>
+          <canvas id="tsCanvas"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="ch-hd"><div class="t">P-v 图 <small>压力–比容(对数坐标)</small></div></div>
+          <canvas id="pvCanvas"></canvas>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { init } from './js/ui.js';
+  init();
+</script>
+</body>
+</html>

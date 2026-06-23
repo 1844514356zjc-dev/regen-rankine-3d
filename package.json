@@ -1,0 +1,17 @@
+{
+  "name": "regen-rankine-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "一级回热朗肯循环 — 3D 动力装置 + T-s/P-v 交互仿真",
+  "scripts": {
+    "serve": "node serve.js"
+  },
+  "dependencies": {
+    "iapws-if97": "^2.1.5",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
